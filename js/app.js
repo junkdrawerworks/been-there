@@ -680,6 +680,12 @@ makeMaps();
 // A finger panning a map near the screen's side can set off Android's back gesture (or Chrome's swipe to go back),
 // which takes the touch and then goes Back. A Back that comes mid-pan, or within a second of a map's touch being
 // taken, is a slip: the page stays as it was. A Back at any other time leaves, as it always has.
+// Opening a share link while the page is open (a new #s=… on the same page) also fires popstate, and the guard would
+// take it for a Back and undo it, so only a step back or forward through the history reaches the guard. (Where the
+// browser can't say which it was, every popstate does, as before.)
+let traversing = true;
+window.navigation?.addEventListener('navigate', e => { traversing = e.navigationType === 'traverse'; });
+addEventListener('popstate', e => { if (!traversing) e.stopImmediatePropagation(); });
 guardEdges({ surfaces: [maps.us.svg, maps.world.svg] });
 wire();
 setTab(ui.tab);

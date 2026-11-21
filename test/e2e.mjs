@@ -248,6 +248,14 @@ for (const [width, height, touch] of [[320, 568, true], [360, 740, true], [390, 
   await p2.waitForTimeout(1100);
   await p2.evaluate(() => history.back());
   await p2.waitForURL(/icon\.svg$/, { timeout: 5000 }).catch(() => assert.fail('Back a while after a touch was taken should leave in one press'));
+  // Opening a share link on the open page isn't a Back: the link stays and its map shows.
+  await p2.goto(base);
+  await p2.click('#us-summary');
+  const hash = new URL(link).hash;
+  await p2.evaluate(hash => { location.hash = hash; }, hash);
+  await p2.waitForTimeout(300);
+  assert.equal(await p2.evaluate(() => location.hash), hash, 'opening a share link on the open page should keep it');
+  assert.match(await p2.textContent('#banner'), /Mark’s map/);
   await other.close();
 }
 
