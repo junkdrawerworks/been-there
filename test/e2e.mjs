@@ -258,6 +258,19 @@ for (const [width, height, touch] of [[320, 568, true], [360, 740, true], [390, 
   assert.match(await p2.textContent('#banner'), /Mark’s map/);
   await other.close();
 }
+// After a reload, Back still leaves in one press: the guard's step in the history is still there, and still its own.
+{
+  const other = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, serviceWorkers: 'block' });
+  const p2 = await other.newPage();
+  await p2.goto(base + 'icon.svg');
+  await p2.goto(base);
+  await p2.click('#us-summary');
+  await p2.reload();
+  await p2.waitForTimeout(300);
+  await p2.evaluate(() => history.back());
+  await p2.waitForURL(/icon\.svg$/, { timeout: 5000 }).catch(() => assert.fail('Back after a reload should leave in one press'));
+  await other.close();
+}
 
 // Fits a phone: nothing scrolls sideways.
 assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'the page scrolls sideways on a phone');
