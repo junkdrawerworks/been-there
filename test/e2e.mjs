@@ -213,24 +213,29 @@ for (const [width, height, touch] of [[320, 568, true], [360, 740, true], [390, 
 
 // A Back that comes while a finger is panning a map, or just after the browser took a map's touch away (as Android's
 // back gesture does when a finger starts near the screen's side), is taken for a slip: the page stays, zoomed and
-// with its card open as it was. A second on, Back leaves in one press, as it always has.
+// with its card open as it was. The guard's step in the history is there only while a finger is on a map and for a
+// second after: the rest of the time Back leaves in one press, as it always has (an installed app closes).
 {
   const other = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, serviceWorkers: 'block' });
   const p2 = await other.newPage();
   await p2.goto(base + 'icon.svg'); // somewhere to go Back to
   await p2.goto(base);
-  await p2.click('#us-map [data-zoom="in"]');
+  await p2.click('#us-map [data-zoom="in"]'); // a tap first, as a person's would be
   await p2.evaluate(() => beenThere.open('us', 'MT'));
   const look = () => p2.evaluate(() => ({ url: location.href, card: document.getElementById('card-name')?.textContent.trim(), k: beenThere.maps.us.k, tx: Math.round(beenThere.maps.us.tx) }));
+  const guarded = () => p2.evaluate(() => !!history.state?.__edgeGuard);
   const before = await look();
   assert.equal(before.card, 'Montana');
   assert.ok(before.k > 1);
+  assert.equal(await guarded(), false, 'with no finger on a map the history should carry no step of the guard\'s');
+  const steps = await p2.evaluate(() => history.length);
   const cdp = await other.newCDPSession(p2);
   const box = await p2.locator('.map-us').boundingBox();
   const at = (dx = 0) => [{ x: box.x + box.width / 2 + dx, y: box.y + box.height / 3 }];
   const touch = (type, touchPoints = []) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints });
-  // Back in the middle of a pan: the page stays, and the pan carries on.
+  // A finger down on the map adds the guard's step. Back in the middle of a pan: the page stays, and the pan carries on.
   await touch('touchStart', at()); await touch('touchMove', at(10));
+  assert.equal(await guarded(), true, 'a finger down on the map should add the guard\'s step');
   const mid = await look();
   await p2.evaluate(() => history.back());
   await p2.waitForTimeout(300);
@@ -243,31 +248,53 @@ for (const [width, height, touch] of [[320, 568, true], [360, 740, true], [390, 
   await p2.evaluate(() => history.back());
   await p2.waitForTimeout(300);
   assert.deepEqual(await look(), now, 'Back just after a touch was taken should keep the page as it was');
-  // A tap puts the guard back, and a second on, Back leaves in one press.
-  await p2.click('#us-summary');
-  await p2.waitForTimeout(1100);
-  await p2.evaluate(() => history.back());
+  // A second on, the guard's step is gone again, and Back leaves in one press.
+  await p2.waitForFunction(() => !history.state?.__edgeGuard, null, { timeout: 3000 }).catch(() => assert.fail('the guard\'s step should be gone a second after the finger was taken'));
+  await p2.waitForTimeout(200);
+  assert.equal(await p2.evaluate(() => history.length), steps + 1, 'the guard should leave one step forward at most, as a Back does');
+  assert.deepEqual(await look(), now);
+  await p2.evaluate(() => { setTimeout(() => history.back()); }); // after this returns: the page it leaves takes the evaluation with it
   await p2.waitForURL(/icon\.svg$/, { timeout: 5000 }).catch(() => assert.fail('Back a while after a touch was taken should leave in one press'));
-  // Opening a share link on the open page isn't a Back: the link stays and its map shows.
+  // A swipe up the page that starts on the unzoomed map scrolls it, and it stays scrolled when the guard's step comes off.
   await p2.goto(base);
   await p2.click('#us-summary');
+  const b1 = await p2.locator('.map-us').boundingBox();
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: b1.x + b1.width / 2, y: b1.y + b1.height / 2 }] });
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] }); // the browser took it for scrolling
+  await p2.evaluate(() => scrollTo(0, 600));
+  await p2.waitForFunction(() => !history.state?.__edgeGuard, null, { timeout: 3000 });
+  await p2.waitForTimeout(200);
+  assert.equal(await p2.evaluate(() => Math.round(scrollY)), 600, 'the page should stay where it was scrolled when the guard\'s step comes off');
+  // Opening a share link just after a pan isn't a Back: the link stays and its map shows.
+  await p2.goto(base);
+  await p2.click('#us-summary');
+  const b2 = await p2.locator('.map-us').boundingBox();
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: b2.x + b2.width / 2, y: b2.y + b2.height / 3 }] });
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
   const hash = new URL(link).hash;
   await p2.evaluate(hash => { location.hash = hash; }, hash);
   await p2.waitForTimeout(300);
-  assert.equal(await p2.evaluate(() => location.hash), hash, 'opening a share link on the open page should keep it');
+  assert.equal(await p2.evaluate(() => location.hash), hash, 'opening a share link just after a pan should keep it');
   assert.match(await p2.textContent('#banner'), /Mark’s map/);
   await other.close();
 }
-// After a reload, Back still leaves in one press: the guard's step in the history is still there, and still its own.
+// A reload while the guard's step is there takes it off a second later as usual, and Back then leaves in one press.
 {
   const other = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, serviceWorkers: 'block' });
   const p2 = await other.newPage();
   await p2.goto(base + 'icon.svg');
   await p2.goto(base);
   await p2.click('#us-summary');
+  const cdp = await other.newCDPSession(p2);
+  const box = await p2.locator('.map-us').boundingBox();
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: box.x + box.width / 2, y: box.y + box.height / 3 }] });
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  assert.equal(await p2.evaluate(() => !!history.state?.__edgeGuard), true);
   await p2.reload();
-  await p2.waitForTimeout(300);
-  await p2.evaluate(() => history.back());
+  await p2.waitForTimeout(1600); // taking it off goes back to the step from before the reload, which loads the page again
+  await p2.waitForLoadState();
+  assert.equal(await p2.evaluate(() => !!history.state?.__edgeGuard), false, 'after a reload the guard\'s step should still be taken off');
+  await p2.evaluate(() => { setTimeout(() => history.back()); }); // after this returns: the page it leaves takes the evaluation with it
   await p2.waitForURL(/icon\.svg$/, { timeout: 5000 }).catch(() => assert.fail('Back after a reload should leave in one press'));
   await other.close();
 }

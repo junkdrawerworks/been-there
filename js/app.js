@@ -686,6 +686,9 @@ makeMaps();
 let traversing = true;
 window.navigation?.addEventListener('navigate', e => { traversing = e.navigationType === 'traverse'; });
 addEventListener('popstate', e => { if (!traversing) e.stopImmediatePropagation(); });
+// The guard's step comes off a second after the finger lifts, by going back over it, and the browser would put the page
+// back where it was scrolled when the finger went down: a swipe up the page that starts on the map jumped back.
+try { history.scrollRestoration = 'manual'; } catch { /* no history here */ }
 guardEdges({ surfaces: [maps.us.svg, maps.world.svg] });
 wire();
 setTab(ui.tab);
