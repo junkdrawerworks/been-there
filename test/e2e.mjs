@@ -195,6 +195,22 @@ assert.deepEqual(size, [1080, 1350, true]);
   await page.click('#us-map [data-zoom="reset"]');
 }
 
+// On a phone's touch screen both maps keep clear of the screen's sides, where Android's back gesture starts: 24 px from
+// the map's edge (where a finger panning it can start) to the screen's side, at any phone width. With a mouse, nothing
+// starts at the side, and the map reaches out past the page's margin as it always has.
+for (const [width, height, touch] of [[320, 568, true], [360, 740, true], [390, 844, true], [390, 844, false]]) {
+  const other = await browser.newContext({ viewport: { width, height }, hasTouch: touch, isMobile: touch, serviceWorkers: 'block' });
+  const p2 = await other.newPage();
+  await p2.goto(base);
+  for (const kind of ['us', 'world']) {
+    await p2.evaluate(kind => beenThere.setTab(kind), kind);
+    const b = await p2.evaluate(kind => { const r = beenThere.maps[kind].svg.getBoundingClientRect(); return { left: r.left, right: innerWidth - r.right }; }, kind);
+    if (touch) assert.ok(b.left >= 23.5 && b.right >= 23.5, `the ${kind} map is ${Math.min(b.left, b.right).toFixed(1)} px from the screen's side at ${width} px`);
+    else assert.deepEqual([b.left, b.right], [6, 6], `with a mouse the ${kind} map should keep its old place`);
+  }
+  await other.close();
+}
+
 // Fits a phone: nothing scrolls sideways.
 assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'the page scrolls sideways on a phone');
 

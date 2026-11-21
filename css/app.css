@@ -167,6 +167,9 @@ main { max-width: 1080px; margin: 0 auto; padding-bottom: 24px; }
   .smalls button[data-s="theirs"] { background: var(--theirs); color: #3a2208; }
   .smalls button.sel { outline: 2px solid var(--ink); outline-offset: 1px; }
 }
+/* On a phone's touch screen the maps keep 24 px from the screen's sides, clear of where Android's back gesture
+   starts, so a finger panning a zoomed-in map can't set it off by starting near the side. The page's margin gives 16. */
+@media (pointer: coarse) and (max-width: 560px) { .mapwrap { margin-inline: 8px; } }
 
 /* ---- Legend that's also the paintbox */
 .legend { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 4px; }
