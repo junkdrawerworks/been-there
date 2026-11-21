@@ -7,6 +7,7 @@ import { WORDS, answerIn } from './data/words.js';
 import { MapView, el } from './map.js';
 import * as L from './logic.js';
 import { savePicture } from './picture.js';
+import { guardEdges } from './edge-guard.js';
 
 const ADDRESS = 'https://been-there.junkdrawer.works/';
 const KEY = 'been-there.v1';
@@ -671,11 +672,15 @@ function readShared() {
 }
 function unshare() {
   ui.shared = null; ui.view = 'mine';
-  history.replaceState(null, '', location.pathname + location.search);
+  history.replaceState(history.state, '', location.pathname + location.search); // keeps the edge guard's mark
   render();
 }
 
 makeMaps();
+// A finger panning a map near the screen's side can set off Android's back gesture (or Chrome's swipe to go back),
+// which takes the touch and then goes Back. A Back that comes mid-pan, or within a second of a map's touch being
+// taken, is a slip: the page stays as it was. A Back at any other time leaves, as it always has.
+guardEdges({ surfaces: [maps.us.svg, maps.world.svg] });
 wire();
 setTab(ui.tab);
 readShared();

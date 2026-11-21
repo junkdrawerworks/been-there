@@ -41,6 +41,7 @@ To put it online with GitHub Pages: **Settings → Pages → Build and deploymen
 - `js/map.js`: a tappable, pinchable SVG map that colors its shapes by status.
 - `js/logic.js`: the arithmetic with no page in it: counts, regions, milestones, the road trip search, word guesses, share links. `test/unit.test.mjs` checks it.
 - `js/picture.js`: draws your map as a picture to save or send.
+- `js/edge-guard.js`: keeps a swipe near the side of a phone's screen (Android's back gesture) from leaving the page mid-pan. Shared with the other junkdrawer.works projects.
 - `js/data/states.js`, `js/data/countries.js`: what each card says. Plain data, easy to edit.
 - `js/data/words.js`: each word, its answers, which states use which, and the splits inside states.
 - `js/data/us-geo.js`, `js/data/world-geo.js`: the shapes, made by `tools/build-geo.mjs` from [us-atlas](https://github.com/topojson/us-atlas) (US Census Bureau) and [world-atlas](https://github.com/topojson/world-atlas) (Natural Earth), both public domain. The world is drawn in the Equal Earth projection, so areas compare fairly.

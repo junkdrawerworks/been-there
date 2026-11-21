@@ -211,6 +211,46 @@ for (const [width, height, touch] of [[320, 568, true], [360, 740, true], [390, 
   await other.close();
 }
 
+// A Back that comes while a finger is panning a map, or just after the browser took a map's touch away (as Android's
+// back gesture does when a finger starts near the screen's side), is taken for a slip: the page stays, zoomed and
+// with its card open as it was. A second on, Back leaves in one press, as it always has.
+{
+  const other = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, serviceWorkers: 'block' });
+  const p2 = await other.newPage();
+  await p2.goto(base + 'icon.svg'); // somewhere to go Back to
+  await p2.goto(base);
+  await p2.click('#us-map [data-zoom="in"]');
+  await p2.evaluate(() => beenThere.open('us', 'MT'));
+  const look = () => p2.evaluate(() => ({ url: location.href, card: document.getElementById('card-name')?.textContent.trim(), k: beenThere.maps.us.k, tx: Math.round(beenThere.maps.us.tx) }));
+  const before = await look();
+  assert.equal(before.card, 'Montana');
+  assert.ok(before.k > 1);
+  const cdp = await other.newCDPSession(p2);
+  const box = await p2.locator('.map-us').boundingBox();
+  const at = (dx = 0) => [{ x: box.x + box.width / 2 + dx, y: box.y + box.height / 3 }];
+  const touch = (type, touchPoints = []) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints });
+  // Back in the middle of a pan: the page stays, and the pan carries on.
+  await touch('touchStart', at()); await touch('touchMove', at(10));
+  const mid = await look();
+  await p2.evaluate(() => history.back());
+  await p2.waitForTimeout(300);
+  assert.deepEqual(await look(), mid, 'Back in the middle of a pan should keep the page as it was');
+  await touch('touchMove', at(40)); await touch('touchEnd');
+  assert.notEqual((await look()).tx, mid.tx, 'the pan should carry on after a Back that was taken for a slip');
+  // The browser takes the touch (pointercancel) and a Back follows: the page stays as it was.
+  const now = await look();
+  await touch('touchStart', at()); await touch('touchCancel');
+  await p2.evaluate(() => history.back());
+  await p2.waitForTimeout(300);
+  assert.deepEqual(await look(), now, 'Back just after a touch was taken should keep the page as it was');
+  // A tap puts the guard back, and a second on, Back leaves in one press.
+  await p2.click('#us-summary');
+  await p2.waitForTimeout(1100);
+  await p2.evaluate(() => history.back());
+  await p2.waitForURL(/icon\.svg$/, { timeout: 5000 }).catch(() => assert.fail('Back a while after a touch was taken should leave in one press'));
+  await other.close();
+}
+
 // Fits a phone: nothing scrolls sideways.
 assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'the page scrolls sideways on a phone');
 
