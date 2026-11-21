@@ -182,6 +182,19 @@ const size = await page.evaluate(async () => {
 });
 assert.deepEqual(size, [1080, 1350, true]);
 
+// A swipe sideways is nobody's, so it can't run on into Chrome's swipe to go Back or Forward: the page doesn't
+// overscroll, an unzoomed map lets the page scroll up and down past it (and nothing else), and a zoomed-in one takes
+// every touch for panning.
+{
+  const look = await page.evaluate(() => ['html', 'body'].map(s => getComputedStyle(document.querySelector(s)).overscrollBehaviorX));
+  assert.deepEqual(look, ['none', 'none'], 'the page should not overscroll sideways');
+  const touch = () => page.evaluate(() => getComputedStyle(beenThere.maps.us.svg).touchAction);
+  assert.equal(await touch(), 'pan-y', 'an unzoomed map should only let the page scroll up and down');
+  await page.click('#us-map [data-zoom="in"]');
+  assert.equal(await touch(), 'none', 'a zoomed-in map should take every touch');
+  await page.click('#us-map [data-zoom="reset"]');
+}
+
 // Fits a phone: nothing scrolls sideways.
 assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'the page scrolls sideways on a phone');
 

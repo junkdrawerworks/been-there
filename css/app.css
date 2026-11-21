@@ -41,6 +41,9 @@
 
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
+/* No swipe sideways starts the browser's Back or Forward (Chrome's overscroll navigation): a finger panning a zoomed-in
+   map past its edge would otherwise leave the page. */
+html, body { overscroll-behavior: none; }
 body {
   margin: 0; background: var(--paper); color: var(--ink); font: 16px/1.5 var(--sans);
   padding: 0 max(16px, env(safe-area-inset-right)) 0 max(16px, env(safe-area-inset-left));
