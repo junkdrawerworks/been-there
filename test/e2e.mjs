@@ -278,9 +278,11 @@ for (const [width, height, touch] of [[320, 568, true], [360, 740, true], [390, 
   assert.match(await p2.textContent('#banner'), /Mark’s map/);
   await other.close();
 }
-// A reload while the guard's step is there takes it off a second later as usual, and Back then leaves in one press.
+// A reload while the guard's step is there makes it a plain step (going back over it to the step from before the reload
+// would load the page again): no step of the guard's is left, the page isn't loaded twice, and two Backs leave, once.
 {
   const other = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, serviceWorkers: 'block' });
+  await other.addInitScript(() => { try { sessionStorage.loads = (+sessionStorage.loads || 0) + 1; } catch {} });
   const p2 = await other.newPage();
   await p2.goto(base + 'icon.svg');
   await p2.goto(base);
@@ -290,12 +292,17 @@ for (const [width, height, touch] of [[320, 568, true], [360, 740, true], [390, 
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: box.x + box.width / 2, y: box.y + box.height / 3 }] });
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
   assert.equal(await p2.evaluate(() => !!history.state?.__edgeGuard), true);
+  const loads = await p2.evaluate(() => +sessionStorage.loads);
   await p2.reload();
-  await p2.waitForTimeout(1600); // taking it off goes back to the step from before the reload, which loads the page again
+  await p2.waitForTimeout(1600);
   await p2.waitForLoadState();
-  assert.equal(await p2.evaluate(() => !!history.state?.__edgeGuard), false, 'after a reload the guard\'s step should still be taken off');
+  assert.equal(await p2.evaluate(() => !!history.state?.__edgeGuard), false, 'after a reload the guard\'s step should be a plain one');
+  assert.equal(await p2.evaluate(() => +sessionStorage.loads), loads + 1, 'the reload should load the page once, not again a second later');
+  await p2.evaluate(() => history.back());
+  await p2.waitForTimeout(300);
+  assert.equal(p2.url(), base, 'the plain step left by the reload takes one Back, once');
   await p2.evaluate(() => { setTimeout(() => history.back()); }); // after this returns: the page it leaves takes the evaluation with it
-  await p2.waitForURL(/icon\.svg$/, { timeout: 5000 }).catch(() => assert.fail('Back after a reload should leave in one press'));
+  await p2.waitForURL(/icon\.svg$/, { timeout: 5000 }).catch(() => assert.fail('the next Back after a reload should leave'));
   await other.close();
 }
 
